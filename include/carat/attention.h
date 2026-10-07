@@ -28,7 +28,7 @@ void grouped_global_qk_wgmma_bf16(const void *query, const void *key_cache, void
                                   int kv_heads, int query_group, int context_length,
                                   int head_dimension, cudaStream_t stream, int tiles_per_block = 1);
 
-// Block-128 signed-INT8 QK frontier. K/Q are row-major signed bytes and scales are
+// Block-128 signed-INT8 QK. K/Q are row-major signed bytes and scales are
 // [row, 4]. Four independently scaled S32 WGMMA partials are accumulated into BF16 scores.
 void grouped_global_qk_wgmma_int8_block128(const void *query, const float *query_scales,
                                            const void *key_cache, const float *key_scales,
@@ -37,14 +37,14 @@ void grouped_global_qk_wgmma_int8_block128(const void *query, const float *query
                                            int cache_capacity, cudaStream_t stream,
                                            int tiles_per_block = 1);
 
-// Correctness frontier for one 64-token Hopper global-attention tile. This keeps QK scores and
+// One 64-token Hopper global-attention tile. This keeps QK scores and
 // probabilities in shared memory and performs both QK and PV with WGMMA.
 void grouped_global_attention_wgmma_tile_bf16(const void *query, const void *key_cache,
                                               const void *value_cache, void *output, int batch,
                                               int kv_heads, int query_group, int context_length,
                                               int head_dimension, cudaStream_t stream);
 
-// Fixed-scale E4M3 PV research primitive. Values are V*64 and probabilities are P*448;
+// Fixed-scale E4M3 PV. Values are V*64 and probabilities are P*448;
 // the kernel applies the inverse product scale to its FP32 WGMMA accumulator. Context is split
 // into enough independent CTAs to occupy H200 at small batches, then reduced in FP32.
 void grouped_global_pv_wgmma_fp8_rs(const void *value_cache, const void *probabilities,
@@ -52,7 +52,7 @@ void grouped_global_pv_wgmma_fp8_rs(const void *value_cache, const void *probabi
                                     int query_group, int context_length, int head_dimension,
                                     int cache_capacity, int segments, cudaStream_t stream);
 
-// Block-128 signed-INT8 V frontier. V is reconstructed with per-token/block FP32 scales in
+// Block-128 signed-INT8 V. V is reconstructed with per-token/block FP32 scales in
 // shared memory, then BF16 WGMMA accumulates the already-normalized probabilities in FP32.
 void grouped_global_pv_wgmma_int8_block128(const void *value_cache, const float *value_scales,
                                            const void *probabilities, void *output, int batch,
@@ -65,7 +65,7 @@ void grouped_global_pv_wgmma_int8_rs(const void *value_cache, const void *probab
                                      int context_length, int head_dimension, int cache_capacity,
                                      int segments, cudaStream_t stream);
 
-// Research cache-write helpers for the FP8 PV primitive. Values are quantized once into the
+// Cache-write helpers for FP8 PV. Values are quantized once into the
 // native K-major WGMMA tile layout; probabilities are quantized into the same per-tile contract.
 void quantize_grouped_global_values_wgmma_fp8(const void *values, void *packed_values, int batch,
                                               int kv_heads, int context_length, int head_dimension,
@@ -104,7 +104,7 @@ void quantize_grouped_global_probabilities_wgmma_fp8(const void *probabilities,
                                                      int kv_heads, int query_group,
                                                      int context_length, cudaStream_t stream);
 
-// One-buffer RS-WGMMA frontier. Raw KV remains in shared memory while exact K and V fragments
+// One-buffer RS-WGMMA. Raw KV remains in shared memory while exact K and V fragments
 // are constructed directly in the tensor-core warpgroup's registers.
 void grouped_global_attention_wgmma_raw_rs_tile_bf16(
     const void *query, const void *raw_cache, const float *inverse_rms_cache,
@@ -122,7 +122,7 @@ void grouped_global_attention_wgmma_raw_rs_split_bf16(
     int query_group, int context_length, int head_dimension, int tiles_per_segment,
     cudaStream_t stream);
 
-// Full-context research path. Workspace contains FP32 partial outputs
+// Full-context attention. Workspace contains FP32 partial outputs
 // [head, segment, query, dimension] and FP32 max/sum pairs [head, segment, query].
 void grouped_global_attention_wgmma_split_bf16(const void *query, const void *key_cache,
                                                const void *value_cache, void *output,

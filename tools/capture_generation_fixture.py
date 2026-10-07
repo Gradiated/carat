@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture token-level greedy output from the an SGLang reference server for parity checks."""
+"""Capture token-level greedy output from an SGLang reference server."""
 
 from __future__ import annotations
 

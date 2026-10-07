@@ -35,6 +35,9 @@ public:
   explicit Allocation(std::uint64_t bytes) {
     check(cudaMalloc(&pointer_, bytes), "allocate model workspace");
   }
+  Allocation(const Allocation &) = delete;
+  Allocation &operator=(const Allocation &) = delete;
+
   ~Allocation() {
     cudaFree(pointer_);
   }

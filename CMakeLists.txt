@@ -6,7 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(CARAT_ENABLE_CUDA "Build the native Gemma 4 CUDA execution backend" OFF)
+option(CARAT_ENABLE_CUDA "Build the CUDA backend and HTTP runtime" OFF)
+option(CARAT_BUILD_BENCHMARKS "Build GPU benchmarks and model parity tools" OFF)
 
 include(CTest)
 find_package(Threads REQUIRED)
@@ -44,23 +45,35 @@ target_compile_options(carat-inspect PRIVATE -Wall -Wextra -Wpedantic -Wconversi
 
 if(CARAT_ENABLE_CUDA)
   enable_language(CUDA)
-  find_package(CUDAToolkit REQUIRED)
+  find_package(CUDAToolkit 12.9 REQUIRED)
+  find_path(CARAT_CURAND_INCLUDE_DIR curand_kernel.h
+    HINTS ${CUDAToolkit_INCLUDE_DIRS} REQUIRED)
+  find_path(CUDNN_INCLUDE_DIR cudnn_version.h REQUIRED)
+  foreach(part MAJOR MINOR PATCHLEVEL)
+    file(STRINGS "${CUDNN_INCLUDE_DIR}/cudnn_version.h" version_line
+      REGEX "^#define CUDNN_${part} [0-9]+")
+    string(REGEX MATCH "[0-9]+" CUDNN_${part} "${version_line}")
+  endforeach()
+  set(CUDNN_VERSION "${CUDNN_MAJOR}.${CUDNN_MINOR}.${CUDNN_PATCHLEVEL}")
+  if(CUDNN_VERSION VERSION_LESS 9.10)
+    message(FATAL_ERROR "Carat requires cuDNN 9.10 or newer; found ${CUDNN_VERSION}")
+  endif()
   include(FetchContent)
   set(CUDNN_FRONTEND_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
   set(CUDNN_FRONTEND_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(
     cudnn_frontend
-    GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
-    GIT_TAG b372d39879d44c91a8d5b342022e74802b6a8da2
-    GIT_SHALLOW FALSE
+    URL https://codeload.github.com/NVIDIA/cudnn-frontend/tar.gz/b372d39879d44c91a8d5b342022e74802b6a8da2
+    URL_HASH SHA256=8fbdd859e484924f1ccbafa3a6f8c4bdeb970f4cbbcf20ddf54a9ceaa3bf91ac
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   FetchContent_MakeAvailable(cudnn_frontend)
   FetchContent_Declare(
     cutlass
-    GIT_REPOSITORY https://github.com/NVIDIA/cutlass.git
-    GIT_TAG 6c65a175668952f09bcbf66cb97a8de1b734b4a0
-    GIT_SHALLOW FALSE
+    URL https://codeload.github.com/NVIDIA/cutlass/tar.gz/6c65a175668952f09bcbf66cb97a8de1b734b4a0
+    URL_HASH SHA256=6e2f4b08bd4b54ee795a18de4b7c0a65a65b62fcb83c2785e872e18c1fae28bc
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR _carat_header_only
   )
   FetchContent_MakeAvailable(cutlass)
@@ -83,8 +96,12 @@ if(CARAT_ENABLE_CUDA)
     cuda/qkv.cu
   )
   target_include_directories(carat_cuda PUBLIC include PRIVATE
+    ${CARAT_CURAND_INCLUDE_DIR}
+    ${CUDNN_INCLUDE_DIR}
     ${cutlass_SOURCE_DIR}/include
     ${cutlass_SOURCE_DIR}/tools/util/include)
+  target_compile_options(carat_cuda PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
   target_link_libraries(carat_cuda PUBLIC carat_model CUDA::cudart CUDA::cublas
     CUDA::cublasLt cudnn_frontend ${CUDNN_LIBRARY})
   set_target_properties(carat_cuda PROPERTIES
@@ -112,12 +129,14 @@ if(CARAT_ENABLE_CUDA)
   add_executable(carat-load src/load_main.cpp)
   target_link_libraries(carat-load PRIVATE carat_cuda)
 
-  foreach(tool IN ITEMS linear-benchmark fp8-linear-benchmark fp8-model-parity fp8-quality-eval
-      attention-benchmark fp8-attention-benchmark prefill-attention-benchmark layer-parity
-      model-parity prefill-model-parity prefill-benchmark batch-benchmark ragged-batch-parity)
-    string(REPLACE "-" "_" source_name "${tool}")
-    carat_cuda_tool(${tool} src/${source_name}.cu)
-  endforeach()
+  if(CARAT_BUILD_BENCHMARKS)
+    foreach(tool IN ITEMS linear-benchmark fp8-linear-benchmark fp8-model-parity fp8-quality-eval
+        attention-benchmark fp8-attention-benchmark prefill-attention-benchmark layer-parity
+        model-parity prefill-model-parity prefill-benchmark batch-benchmark ragged-batch-parity)
+      string(REPLACE "-" "_" source_name "${tool}")
+      carat_cuda_tool(${tool} src/${source_name}.cu)
+    endforeach()
+  endif()
 
   add_executable(carat-runtime src/native_runtime_main.cpp)
   target_link_libraries(carat-runtime PRIVATE carat_cuda carat_runtime carat_support)

@@ -196,6 +196,9 @@ public:
   explicit Allocation(std::uint64_t bytes) {
     check(cudaMalloc(&pointer_, bytes), "allocate batch workspace");
   }
+  Allocation(const Allocation &) = delete;
+  Allocation &operator=(const Allocation &) = delete;
+
   ~Allocation() {
     cudaFree(pointer_);
   }

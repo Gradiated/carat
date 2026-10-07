@@ -1,9 +1,9 @@
 # Carat
 
-Carat is a C++20/CUDA inference engine for the text decoder of Gemma 4 31B on
-NVIDIA Hopper GPUs, developed on an H200. It uses sliding-window KV ring buffers,
-model-specific attention kernels, continuous batching, prefix-cache reuse, and
-optional FP8 execution and assistant-model speculative decoding.
+Carat runs Gemma 4 31B text inference on a single NVIDIA H200. It is written in C++ and CUDA,
+with ring buffers for the model's sliding-window attention and an HTTP server
+for token completions. It supports continuous batching, prefix-cache reuse,
+FP8 decode, and speculative decoding with a Gemma assistant model.
 
 Read the [blog post](https://www.gradiated.com/library/gemma-inference-engine/)
 for the design and performance results.
@@ -20,22 +20,39 @@ ctest --test-dir build --output-on-failure
 ./build/carat-inspect /path/to/gemma-4-31B-it
 ```
 
-To build the GPU runtime, also install a CUDA toolkit supporting `sm_90a` and
-cuDNN 9 headers and libraries. CMake fetches pinned CUTLASS and cuDNN frontend
-sources. The GPU backend targets Hopper (`sm_90a`).
+To build the GPU runtime, install the CUDA 12.9 toolkit or newer, including
+cuRAND headers, and cuDNN 9.10 or newer headers and libraries. Put `nvcc` on your `PATH`.
+CMake fetches pinned CUTLASS and cuDNN frontend sources. The GPU backend targets
+Hopper (`sm_90a`). The runtime reserves 24 request slots with an 8,192-token context each, so an H200 is needed for the full model
+and KV cache.
 
 ```sh
 cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release -DCARAT_ENABLE_CUDA=ON
-cmake --build build-cuda -j
+cmake --build build-cuda -j 4
+ctest --test-dir build-cuda --output-on-failure
 ```
+
+Tested on an H200 with Ubuntu 24.04, GCC 13.3, CUDA 12.9, and cuDNN 9.27.
+The test suites, BF16 and FP8 HTTP generation, streaming, batching, and cache
+reuse were checked with the checkpoint below. BF16 greedy output matched
+Transformers 5.19.0 on three short prompts.
 
 ## Run
 
-Download `google/gemma-4-31B-it` separately under its own access terms. Pass the
-local model directory containing `config.json` and the safetensors weights:
+Download `google/gemma-4-31B-it` under its model license. The checkpoint used
+here is revision `b9ea41a2887d8607f594846523f94c6cc75ac8a4`. Pass the local
+directory containing `config.json` and the safetensors weights:
 
 ```sh
 CARAT_RUNTIME_HOST=127.0.0.1 ./build-cuda/carat-runtime /path/to/gemma-4-31B-it
+```
+
+For text prompts, install Transformers and use the client:
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install transformers==5.19.0
+.venv/bin/python tools/chat.py /path/to/gemma-4-31B-it "What is a ring buffer?"
 ```
 
 The server accepts token IDs. Use the model's tokenizer to encode your prompt and
@@ -61,6 +78,6 @@ the model's EOS tokens. `GET /metrics` exposes Prometheus metrics.
 | `CARAT_ASSISTANT_MODEL_PATH` | unset | Assistant checkpoint; requires FP8 decode |
 | `CARAT_ASSISTANT_FP8_MODE` | `off` | Assistant FP8 mode: `off`, `lm_head`, or `all` |
 
-Parity and benchmark programs live in `src/`; fixture and smoke tools live in
-`tools/`. Python model tools require PyTorch, safetensors, and a Transformers
-release with Gemma 4 support. The HTTP smoke tool uses the Python standard library.
+Set `-DCARAT_BUILD_BENCHMARKS=ON` to build the parity and benchmark programs in
+`src/`. Fixture and smoke tools live in `tools/`. Python model tools require
+PyTorch, safetensors, and a Transformers release with Gemma 4 support. The HTTP smoke tool uses the Python standard library.

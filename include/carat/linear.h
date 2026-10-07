@@ -115,7 +115,7 @@ void quantize_bf16_weight_to_fp8_block_128(const void *input, void *output, floa
 void quantize_bf16_activation_to_fp8_block_128(const void *input, void *output, float *scales,
                                                int rows, int input_width, cudaStream_t stream);
 
-// Research oracle for a packed signed-INT4 weight representation. Each independent K block is
+// Round-trip check for a packed signed-INT4 weight representation. Each independent K block is
 // reduced to the signed INT4 [-8, 7] codebook and reconstructed in place as E4M3. The existing FP8
 // GEMM then isolates model-quality impact without claiming the reconstruction is a fast path.
 void roundtrip_fp8_weight_via_int4_blocks(void *fp8_weight, int output_width, int input_width,
