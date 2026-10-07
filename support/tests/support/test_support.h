@@ -1,6 +1,6 @@
 #pragma once
 
-#include "carat/http.h"
+#include "carat/http/http.h"
 
 #include <atomic>
 #include <chrono>

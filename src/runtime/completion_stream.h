@@ -11,8 +11,7 @@ namespace carat {
 
 using ChunkWriter = std::function<bool(std::string_view chunk)>;
 
-// A failed job ends the stream without a finish event or [DONE]; the gateway detects the failure
-// by their absence. A failed write calls cancel so the scheduler frees the slot.
+// Failed jobs omit the finish event and [DONE].
 inline void stream_completion(CompletionJob &job, const ChunkWriter &write,
                               const std::function<void()> &cancel) {
   const std::size_t input_tokens = job.request.input_ids.size();
