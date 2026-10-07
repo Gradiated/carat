@@ -29,7 +29,8 @@ void cuda_check(cudaError_t result, const char *operation) {
 }
 
 void near(float actual, float expected, float tolerance, const char *operation) {
-  if (std::abs(actual - expected) > tolerance) {
+  if (!std::isfinite(actual) || !std::isfinite(expected) ||
+      std::abs(actual - expected) > tolerance) {
     throw std::runtime_error(std::string(operation) + ": expected " + std::to_string(expected) +
                              ", got " + std::to_string(actual));
   }

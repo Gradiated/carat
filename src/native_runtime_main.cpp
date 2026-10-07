@@ -150,12 +150,12 @@ private:
     // cuDNN SDPA plans are keyed by exact shape. Build the active quantum and its one-token tail
     // before readiness so a first cache extension cannot stall every decoder on graph construction.
     std::vector<int> active_prefill_warmup(
-        static_cast<std::size_t>(default_chunk_tokens + options_.prefill_quantum_tokens + 1), 2);
+        static_cast<std::size_t>(
+            std::min(maximum_context, default_chunk_tokens + options_.prefill_quantum_tokens + 1)),
+        2);
     static_cast<void>(runner_.prefill_slot_chunk(0, active_prefill_warmup, default_chunk_tokens));
-    static_cast<void>(
-        runner_.prefill_slot_chunk(0, active_prefill_warmup, options_.prefill_quantum_tokens));
-    static_cast<void>(
-        runner_.prefill_slot_chunk(0, active_prefill_warmup, options_.prefill_quantum_tokens));
+    while (!runner_.prefill_slot_chunk(0, active_prefill_warmup, options_.prefill_quantum_tokens)) {
+    }
 
     runner_.seed_empty_cache_for_benchmark(1);
     for (int active = 1; active <= maximum_slots; ++active) {
@@ -1009,6 +1009,8 @@ int main(int argc, char **argv) {
       std::cerr << "usage: carat-runtime MODEL_DIRECTORY\n";
       return 64;
     }
+
+    carat::require_supported_cuda_runtime();
 
     const auto model = carat::Gemma4Model::open(argv[1]);
     const auto settings = carat::load_runtime_settings(

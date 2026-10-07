@@ -4,6 +4,7 @@
 #include "carat/weight_plan.h"
 
 #include <cuda_runtime.h>
+#include <cudnn.h>
 
 #include <cerrno>
 #include <cmath>
@@ -38,6 +39,9 @@ public:
     if (descriptor_ < 0)
       throw std::runtime_error("cannot open " + path + ": " + std::strerror(errno));
   }
+  FileDescriptor(const FileDescriptor &) = delete;
+  FileDescriptor &operator=(const FileDescriptor &) = delete;
+
   ~FileDescriptor() {
     if (descriptor_ >= 0)
       ::close(descriptor_);
@@ -66,6 +70,21 @@ void read_exact(int descriptor, void *destination, std::size_t bytes, std::uint6
 }
 
 } // namespace
+
+void require_supported_cuda_runtime() {
+  const auto cudnn_version = cudnnGetVersion();
+  if (cudnn_version < 91000) {
+    throw std::runtime_error("Carat requires cuDNN 9.10 or newer; loaded version " +
+                             std::to_string(cudnn_version));
+  }
+  int device = 0;
+  cuda_check(cudaGetDevice(&device), "get CUDA device");
+  cudaDeviceProp properties{};
+  cuda_check(cudaGetDeviceProperties(&properties, device), "get CUDA device properties");
+  if (properties.major != 9 || properties.minor != 0) {
+    throw std::runtime_error("Carat requires a Hopper GPU (sm_90a)");
+  }
+}
 
 struct DeviceWeightArena::Implementation {
   void *arena{nullptr};

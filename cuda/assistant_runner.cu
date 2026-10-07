@@ -61,6 +61,9 @@ public:
   explicit Allocation(std::uint64_t bytes) {
     check(cudaMalloc(&pointer_, static_cast<std::size_t>(bytes)), "allocate assistant workspace");
   }
+  Allocation(const Allocation &) = delete;
+  Allocation &operator=(const Allocation &) = delete;
+
   ~Allocation() {
     cudaFree(pointer_);
   }

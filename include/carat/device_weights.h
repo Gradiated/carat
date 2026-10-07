@@ -10,6 +10,8 @@
 
 namespace carat {
 
+void require_supported_cuda_runtime();
+
 class DeviceWeightArena {
 public:
   static std::unique_ptr<DeviceWeightArena>

@@ -58,6 +58,14 @@ def main() -> None:
     parser.add_argument("--asynchronous-turns", action="store_true")
     args = parser.parse_args()
 
+    for name in ("concurrency", "max_tokens", "turns", "cycles"):
+        if getattr(args, name) < 1:
+            parser.error(f"--{name.replace('_', '-')} must be positive")
+    if args.conversations < 0 or args.suffix_tokens < 0:
+        parser.error("--conversations and --suffix-tokens must not be negative")
+    if args.asynchronous_turns and args.turns < 2:
+        parser.error("--asynchronous-turns requires at least two turns")
+
     conversation_count = args.conversations or args.concurrency
     if conversation_count < args.concurrency:
         raise RuntimeError("conversations must be at least concurrency")
@@ -201,7 +209,7 @@ def main() -> None:
             for state, result in zip(prompt_states, results, strict=True):
                 output_ids = result["output_ids"]
                 usage = result["usage"]
-                if len(output_ids) != args.max_tokens or usage["output_tokens"] != len(output_ids):
+                if not 1 <= len(output_ids) <= args.max_tokens or usage["output_tokens"] != len(output_ids):
                     raise RuntimeError(f"invalid completion response for {result['prompt_id']}")
                 if turn + 1 < args.turns:
                     remaining = state["remaining_ids"]
